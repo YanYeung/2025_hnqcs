@@ -1,14 +1,15 @@
 
 import React, { useState } from 'react';
 import { Download, Medal, Timer, TrendingUp, Trophy, Users } from 'lucide-react';
-import { ParticipantStats, Group } from '../types';
+import { ParticipantStats, Group, AwardConfig } from '../types';
 
 interface LeaderboardProps {
   stats: ParticipantStats[];
   viewMode?: 'admin' | 'display';
+  awardConfig?: AwardConfig;
 }
 
-const Leaderboard: React.FC<LeaderboardProps> = ({ stats, viewMode = 'admin' }) => {
+const Leaderboard: React.FC<LeaderboardProps> = ({ stats, viewMode = 'admin', awardConfig }) => {
   const [activeGroup, setActiveGroup] = useState<Group>('junior');
   const isDisplay = viewMode === 'display';
 
@@ -17,8 +18,17 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ stats, viewMode = 'admin' }) 
 
   const exportCSV = () => {
     // CSV Header
-    const headers = ['排名,组别,队员编号,姓名,最终得分,最终耗时,第一轮得分,第一轮耗时,第二轮得分,第二轮耗时'];
+    const headers = ['排名,组别,队员编号,姓名,最终得分,最终耗时,第一轮得分,第一轮耗时,第二轮得分,第二轮耗时,获奖等级'];
     
+    // Calculate award cutoffs if config exists
+    let c1 = 0, c2 = 0, c3 = 0;
+    if (awardConfig) {
+      const total = displayStats.length;
+      c1 = Math.round(total * (awardConfig.first / 100));
+      c2 = Math.round(total * ((awardConfig.first + awardConfig.second) / 100));
+      c3 = Math.round(total * ((awardConfig.first + awardConfig.second + awardConfig.third) / 100));
+    }
+
     // CSV Rows
     const rows = displayStats.map((stat, index) => {
       const rank = index + 1;
@@ -33,7 +43,14 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ stats, viewMode = 'admin' }) 
       const r2Score = stat.round2?.score ?? '-';
       const r2Time = stat.round2?.time ?? '-';
 
-      return `${rank},${groupName},"${stat.participantId}","${name}",${finalScore},${finalTime},${r1Score},${r1Time},${r2Score},${r2Time}`;
+      let award = '-';
+      if (awardConfig) {
+        if (rank <= c1) award = '一等奖';
+        else if (rank <= c2) award = '二等奖';
+        else if (rank <= c3) award = '三等奖';
+      }
+
+      return `${rank},${groupName},"${stat.participantId}","${name}",${finalScore},${finalTime},${r1Score},${r1Time},${r2Score},${r2Time},${award}`;
     });
 
     const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers, ...rows].join("\n");

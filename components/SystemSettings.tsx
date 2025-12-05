@@ -1,13 +1,15 @@
 
 import React, { useState } from 'react';
-import { X, Save, Plus, Trash2, Edit2, RotateCcw, UserPlus } from 'lucide-react';
-import { SubEvent, Referee } from '../types';
+import { X, Save, Plus, Trash2, Edit2, RotateCcw, UserPlus, Percent } from 'lucide-react';
+import { SubEvent, Referee, AwardConfig } from '../types';
 
 interface SystemSettingsProps {
   isOpen: boolean;
   onClose: () => void;
   competitionName: string;
   onUpdateCompetitionName: (name: string) => void;
+  awardConfig: AwardConfig;
+  onUpdateAwardConfig: (config: AwardConfig) => void;
   subEvents: SubEvent[];
   onAddSubEvent: (name: string) => void;
   onDeleteSubEvent: (id: string) => void;
@@ -22,6 +24,8 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({
   onClose,
   competitionName,
   onUpdateCompetitionName,
+  awardConfig,
+  onUpdateAwardConfig,
   subEvents,
   onAddSubEvent,
   onDeleteSubEvent,
@@ -32,6 +36,7 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'events' | 'users'>('general');
   const [tempName, setTempName] = useState(competitionName);
+  const [tempAwardConfig, setTempAwardConfig] = useState<AwardConfig>(awardConfig);
   
   // Events state
   const [newEventName, setNewEventName] = useState('');
@@ -47,6 +52,7 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({
 
   const handleSaveGeneral = () => {
     onUpdateCompetitionName(tempName);
+    onUpdateAwardConfig(tempAwardConfig);
     alert('保存成功');
   };
 
@@ -122,9 +128,11 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({
             
             {/* General Tab */}
             {activeTab === 'general' && (
-              <div className="space-y-6">
+              <div className="space-y-8">
                 <div>
-                  <h4 className="text-lg font-semibold text-slate-800 mb-4">赛事信息</h4>
+                  <h4 className="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+                    <Edit2 className="w-5 h-5 mr-2 text-indigo-600" /> 赛事信息
+                  </h4>
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-600 mb-1">赛事名称</label>
@@ -135,14 +143,70 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({
                         className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                       />
                     </div>
-                    <button
-                      onClick={handleSaveGeneral}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium flex items-center"
-                    >
-                      <Save className="w-4 h-4 mr-2" />
-                      保存设置
-                    </button>
                   </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-6">
+                  <h4 className="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+                    <Percent className="w-5 h-5 mr-2 text-indigo-600" /> 获奖比例设置
+                  </h4>
+                  <p className="text-sm text-slate-500 mb-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    设置各等级奖项的百分比（如15表示15%）。系统将根据排名自动计算获奖等级并包含在导出的成绩单中。
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-600 mb-1 text-yellow-600">一等奖比例 (%)</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={tempAwardConfig.first}
+                          onChange={e => setTempAwardConfig({...tempAwardConfig, first: Number(e.target.value)})}
+                          className="w-full pl-4 pr-8 py-2 border border-yellow-200 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none"
+                        />
+                        <span className="absolute right-3 top-2 text-slate-400 text-sm">%</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-600 mb-1 text-slate-600">二等奖比例 (%)</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={tempAwardConfig.second}
+                          onChange={e => setTempAwardConfig({...tempAwardConfig, second: Number(e.target.value)})}
+                          className="w-full pl-4 pr-8 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-500 outline-none"
+                        />
+                         <span className="absolute right-3 top-2 text-slate-400 text-sm">%</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-600 mb-1 text-orange-600">三等奖比例 (%)</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={tempAwardConfig.third}
+                          onChange={e => setTempAwardConfig({...tempAwardConfig, third: Number(e.target.value)})}
+                          className="w-full pl-4 pr-8 py-2 border border-orange-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
+                        />
+                         <span className="absolute right-3 top-2 text-slate-400 text-sm">%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4">
+                  <button
+                    onClick={handleSaveGeneral}
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium flex items-center shadow-sm"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    保存所有设置
+                  </button>
                 </div>
               </div>
             )}
@@ -232,7 +296,7 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({
                       className="px-3 py-2 border border-slate-300 rounded-lg text-sm"
                     />
                     <input
-                      type="text" // Visible text for simple management as per request, typically password type
+                      type="text" // Visible text for simple management
                       placeholder="密码"
                       value={newRefPass}
                       onChange={e => setNewRefPass(e.target.value)}

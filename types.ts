@@ -44,6 +44,12 @@ export interface RosterItem {
   subEventId: string;
 }
 
+export interface AwardConfig {
+  first: number;
+  second: number;
+  third: number;
+}
+
 // Global declaration for the CDN-loaded XLSX library
 declare global {
   interface Window {

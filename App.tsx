@@ -6,7 +6,7 @@ import Leaderboard from './components/Leaderboard';
 import Login from './components/Login';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import SystemSettings from './components/SystemSettings';
-import { Entry, Round, ParticipantStats, RosterItem, Group, SubEvent, Referee, Role } from './types';
+import { Entry, Round, ParticipantStats, RosterItem, Group, SubEvent, Referee, Role, AwardConfig } from './types';
 
 type ViewMode = 'admin' | 'display';
 
@@ -19,6 +19,12 @@ const App: React.FC = () => {
   // Competition Info
   const [competitionName, setCompetitionName] = useState(() => localStorage.getItem('competition_name') || '2025年湖南省青少年创新实践大赛');
   
+  // Award Config
+  const [awardConfig, setAwardConfig] = useState<AwardConfig>(() => {
+    const saved = localStorage.getItem('competition_award_config');
+    return saved ? JSON.parse(saved) : { first: 15, second: 25, third: 30 };
+  });
+
   // SubEvents
   const [subEvents, setSubEvents] = useState<SubEvent[]>(() => {
     const saved = localStorage.getItem('competition_subevents');
@@ -102,6 +108,7 @@ const App: React.FC = () => {
   useEffect(() => localStorage.setItem('competition_entries', JSON.stringify(entries)), [entries]);
   useEffect(() => localStorage.setItem('competition_roster', JSON.stringify(roster)), [roster]);
   useEffect(() => localStorage.setItem('competition_name', competitionName), [competitionName]);
+  useEffect(() => localStorage.setItem('competition_award_config', JSON.stringify(awardConfig)), [awardConfig]);
   useEffect(() => localStorage.setItem('competition_subevents', JSON.stringify(subEvents)), [subEvents]);
   useEffect(() => localStorage.setItem('competition_referees', JSON.stringify(referees)), [referees]);
   useEffect(() => localStorage.setItem('competition_admin_password', adminPassword), [adminPassword]);
@@ -360,6 +367,8 @@ const App: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
         competitionName={competitionName}
         onUpdateCompetitionName={setCompetitionName}
+        awardConfig={awardConfig}
+        onUpdateAwardConfig={setAwardConfig}
         subEvents={subEvents}
         onAddSubEvent={handleAddSubEvent}
         onDeleteSubEvent={handleDeleteSubEvent}
@@ -550,7 +559,7 @@ const App: React.FC = () => {
 
             {/* Right Column: Leaderboard Preview in Admin */}
             <div className="lg:col-span-8">
-              <Leaderboard stats={rankingData} viewMode="admin" />
+              <Leaderboard stats={rankingData} viewMode="admin" awardConfig={awardConfig} />
             </div>
           </div>
         )}
