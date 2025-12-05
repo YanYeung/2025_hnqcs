@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Trophy, History, Trash2, Edit2, Users } from 'lucide-react';
+import { Trophy, History, Trash2, Edit2, Users, Monitor, ExternalLink } from 'lucide-react';
 import EntryForm from './components/EntryForm';
 import Leaderboard from './components/Leaderboard';
 import { Entry, Round, ParticipantStats, RosterItem } from './types';
 
+type ViewMode = 'admin' | 'display';
+
 const App: React.FC = () => {
+  const [viewMode, setViewMode] = useState<ViewMode>('admin');
+
   // Load initial state from local storage
   const [entries, setEntries] = useState<Entry[]>(() => {
     const saved = localStorage.getItem('competition_entries');
@@ -18,6 +22,40 @@ const App: React.FC = () => {
 
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
 
+  // Handle routing based on hash
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      if (hash === '#/display') {
+        setViewMode('display');
+      } else {
+        setViewMode('admin');
+      }
+    };
+
+    // Initial check
+    handleHashChange();
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // Sync data across tabs
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'competition_entries' && e.newValue) {
+        setEntries(JSON.parse(e.newValue));
+      }
+      if (e.key === 'competition_roster' && e.newValue) {
+        setRoster(JSON.parse(e.newValue));
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // Save to local storage
   useEffect(() => {
     localStorage.setItem('competition_entries', JSON.stringify(entries));
   }, [entries]);
@@ -38,7 +76,6 @@ const App: React.FC = () => {
     };
     
     setEntries(prev => {
-      // Remove any existing entry for this ID + Round
       const filtered = prev.filter(e => !(e.participantId === participantId && e.round === round));
       return [...filtered, newEntry];
     });
@@ -48,7 +85,6 @@ const App: React.FC = () => {
     setEntries(prev => {
       return prev.map(entry => {
         if (entry.id === updatedEntry.id) return updatedEntry;
-        // Check for collision
         if (entry.participantId === updatedEntry.participantId && entry.round === updatedEntry.round) {
           return null; 
         }
@@ -69,7 +105,6 @@ const App: React.FC = () => {
 
   const handleImportRoster = (newRoster: RosterItem[]) => {
     setRoster(newRoster);
-    // Optional: Update names in existing entries if they match IDs
     setEntries(prev => prev.map(entry => {
       const match = newRoster.find(r => r.id === entry.participantId);
       if (match) {
@@ -86,11 +121,13 @@ const App: React.FC = () => {
     }
   };
 
-  // Calculate stats and ranking
+  const openDisplayMode = () => {
+    window.open(`${window.location.origin}${window.location.pathname}#/display`, '_blank');
+  };
+
   const rankingData = useMemo(() => {
     const participantMap = new Map<string, { round1: Entry | null, round2: Entry | null, name: string }>();
 
-    // 1. Initialize from entries
     entries.forEach(entry => {
       if (!participantMap.has(entry.participantId)) {
         participantMap.set(entry.participantId, { 
@@ -100,7 +137,6 @@ const App: React.FC = () => {
         });
       }
       const p = participantMap.get(entry.participantId)!;
-      // Prefer name from Roster if available, otherwise use entry name
       const rosterMatch = roster.find(r => r.id === entry.participantId);
       if (rosterMatch) {
         p.name = rosterMatch.name;
@@ -151,25 +187,41 @@ const App: React.FC = () => {
     });
   }, [entries, roster]);
 
+  // --- Display Mode View ---
+  if (viewMode === 'display') {
+    return (
+      <div className="min-h-screen bg-slate-100 flex flex-col">
+        <Leaderboard stats={rankingData} viewMode="display" />
+      </div>
+    );
+  }
+
+  // --- Admin Mode View ---
   return (
     <div className="min-h-screen bg-slate-50 pb-12">
-      {/* Header */}
+      {/* Admin Header */}
       <header className="bg-indigo-600 text-white shadow-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <Trophy className="w-8 h-8 text-yellow-300 flex-shrink-0" />
             <div className="flex flex-col">
               <h1 className="text-lg font-bold tracking-tight leading-tight">2025年湖南省青少年创新实践大赛</h1>
-              <span className="text-xs text-indigo-200 font-medium">智能奥运会挑战赛</span>
+              <span className="text-xs text-indigo-200 font-medium">智能奥运会挑战赛 - 评分后台</span>
             </div>
           </div>
           <div className="flex items-center space-x-3">
-             <div className="hidden md:flex items-center space-x-1 bg-indigo-700 px-3 py-1 rounded-full border border-indigo-500 text-sm">
+             <button 
+               onClick={openDisplayMode}
+               className="hidden md:flex items-center space-x-2 bg-indigo-500 hover:bg-indigo-400 text-white px-4 py-1.5 rounded-lg transition-colors border border-indigo-400 shadow-sm"
+               title="在新窗口打开观众大屏展示界面"
+             >
+               <Monitor className="w-4 h-4" />
+               <span className="text-sm font-medium">打开大屏展示</span>
+               <ExternalLink className="w-3 h-3 opacity-70" />
+             </button>
+             <div className="hidden lg:flex items-center space-x-1 bg-indigo-700 px-3 py-1 rounded-full border border-indigo-500 text-sm">
                 <Users className="w-4 h-4 text-indigo-300" />
                 <span>名单库: {roster.length}人</span>
-             </div>
-             <div className="text-sm bg-indigo-700 px-3 py-1 rounded-full border border-indigo-500">
-               总记录: {entries.length}
              </div>
           </div>
         </div>
@@ -253,9 +305,9 @@ const App: React.FC = () => {
             </section>
           </div>
 
-          {/* Right Column: Leaderboard */}
+          {/* Right Column: Leaderboard Preview in Admin */}
           <div className="lg:col-span-8">
-            <Leaderboard stats={rankingData} />
+            <Leaderboard stats={rankingData} viewMode="admin" />
           </div>
 
         </div>
