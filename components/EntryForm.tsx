@@ -8,7 +8,8 @@ interface EntryFormProps {
   editingEntry?: Entry | null;
   onUpdateEntry?: (entry: Entry) => void;
   onCancelEdit?: () => void;
-  onImportRoster: (roster: RosterItem[]) => void;
+  // Use a partial type here because the form doesn't know the current subEventId
+  onImportRoster: (roster: Omit<RosterItem, 'subEventId'>[]) => void;
   roster: RosterItem[];
 }
 
@@ -41,7 +42,7 @@ const EntryForm: React.FC<EntryFormProps> = ({
     } else {
       setParticipantId('');
       setParticipantName('');
-      // Keep group selection as is for convenience when entering multiple same-group students
+      // Keep group selection as is for convenience
       setRound('1');
       setScore('');
       setTime('');
@@ -163,7 +164,7 @@ const EntryForm: React.FC<EntryFormProps> = ({
           if (nameIndex === -1) nameIndex = 1;
           // Group is optional in fallback, handled in logic below
 
-          const newRoster: RosterItem[] = [];
+          const newRoster: Omit<RosterItem, 'subEventId'>[] = [];
           
           for (let i = 1; i < data.length; i++) {
             const row = data[i];
