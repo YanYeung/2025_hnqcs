@@ -28,7 +28,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onGoToDisplay, competitionName }
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4">
       <div className="mb-8 text-center max-w-lg">
         <h1 className="text-3xl font-bold text-slate-800 tracking-tight">{competitionName}</h1>
-        <p className="text-indigo-600 font-medium mt-2">智能奥运会挑战赛 · 评分系统</p>
+        <p className="text-indigo-600 font-medium mt-2">成绩统计系统</p>
       </div>
 
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">

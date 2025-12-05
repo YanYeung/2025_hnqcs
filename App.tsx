@@ -376,7 +376,7 @@ const App: React.FC = () => {
             <div className="flex flex-col">
               <h1 className="text-lg font-bold tracking-tight leading-tight">{competitionName}</h1>
               <div className="flex items-center text-xs text-indigo-200 font-medium space-x-2">
-                <span>评分系统</span>
+                <span>成绩统计系统</span>
                 <span className="w-1 h-1 bg-indigo-400 rounded-full"></span>
                 <span>{currentUser.role === 'admin' ? '管理员' : `裁判员: ${currentUser.username}`}</span>
               </div>
