@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
-import { Lock, ArrowRight, Monitor, User } from 'lucide-react';
+import { Lock, ArrowRight, Monitor, User, Loader2 } from 'lucide-react';
 
 interface LoginProps {
-  onLogin: (username: string, password: string) => boolean;
+  onLogin: (username: string, password: string) => Promise<boolean>;
   onGoToDisplay: () => void;
   competitionName: string;
 }
@@ -13,14 +13,28 @@ const Login: React.FC<LoginProps> = ({ onLogin, onGoToDisplay, competitionName }
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
   const [shake, setShake] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = onLogin(username, password);
-    if (!success) {
+    if (isLoading) return;
+
+    setIsLoading(true);
+    // Clear error state before attempting login
+    if (error) setError(false);
+
+    try {
+      const success = await onLogin(username, password);
+      if (!success) {
+        setError(true);
+        setShake(true);
+        setTimeout(() => setShake(false), 500);
+      }
+    } catch (err) {
+      console.error(err);
       setError(true);
-      setShake(true);
-      setTimeout(() => setShake(false), 500);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -53,7 +67,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, onGoToDisplay, competitionName }
                     setUsername(e.target.value);
                     setError(false);
                   }}
-                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 outline-none transition-all bg-white"
+                  disabled={isLoading}
+                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 outline-none transition-all bg-white disabled:bg-slate-50"
                   placeholder="admin 或 裁判员账号"
                 />
               </div>
@@ -70,7 +85,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, onGoToDisplay, competitionName }
                     setPassword(e.target.value);
                     setError(false);
                   }}
-                  className={`w-full pl-10 pr-4 py-3 rounded-lg border focus:ring-2 outline-none transition-all ${
+                  disabled={isLoading}
+                  className={`w-full pl-10 pr-4 py-3 rounded-lg border focus:ring-2 outline-none transition-all disabled:bg-slate-50 ${
                     error 
                       ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50 text-red-900' 
                       : 'border-slate-300 focus:border-indigo-500 focus:ring-indigo-200 bg-white'
@@ -87,10 +103,17 @@ const Login: React.FC<LoginProps> = ({ onLogin, onGoToDisplay, competitionName }
 
             <button
               type="submit"
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center group mt-2"
+              disabled={isLoading}
+              className={`w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center group mt-2 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
-              <span>登录</span>
-              <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  <span>登录</span>
+                  <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                </>
+              )}
             </button>
           </form>
 
