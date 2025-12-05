@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Trophy, History, Trash2, Edit2, Users, Monitor, ExternalLink, LogOut, Settings } from 'lucide-react';
 import EntryForm from './components/EntryForm';
 import Leaderboard from './components/Leaderboard';
 import Login from './components/Login';
 import ChangePasswordModal from './components/ChangePasswordModal';
-import { Entry, Round, ParticipantStats, RosterItem } from './types';
+import { Entry, Round, ParticipantStats, RosterItem, Group } from './types';
 
 type ViewMode = 'admin' | 'display';
 
@@ -102,11 +103,12 @@ const App: React.FC = () => {
     localStorage.setItem('competition_admin_password', newPass);
   };
 
-  const addEntry = (participantId: string, participantName: string, round: Round, score: number, time: number) => {
+  const addEntry = (participantId: string, participantName: string, group: Group, round: Round, score: number, time: number) => {
     const newEntry: Entry = {
       id: crypto.randomUUID(),
       participantId,
       participantName,
+      group,
       round,
       score,
       time,
@@ -143,10 +145,15 @@ const App: React.FC = () => {
 
   const handleImportRoster = (newRoster: RosterItem[]) => {
     setRoster(newRoster);
+    // Update existing entries with names/groups from roster if needed
     setEntries(prev => prev.map(entry => {
       const match = newRoster.find(r => r.id === entry.participantId);
       if (match) {
-        return { ...entry, participantName: match.name };
+        return { 
+          ...entry, 
+          participantName: match.name,
+          group: match.group // Auto update group if roster changes
+        };
       }
       return entry;
     }));
@@ -164,23 +171,27 @@ const App: React.FC = () => {
   };
 
   const rankingData = useMemo(() => {
-    const participantMap = new Map<string, { round1: Entry | null, round2: Entry | null, name: string }>();
+    const participantMap = new Map<string, { round1: Entry | null, round2: Entry | null, name: string, group: Group }>();
 
     entries.forEach(entry => {
+      // Logic to determine group: Roster > Entry
+      const rosterMatch = roster.find(r => r.id === entry.participantId);
+      const effectiveGroup = rosterMatch ? rosterMatch.group : entry.group || 'junior';
+      const effectiveName = rosterMatch ? rosterMatch.name : (entry.participantName || entry.participantId);
+
       if (!participantMap.has(entry.participantId)) {
         participantMap.set(entry.participantId, { 
           round1: null, 
           round2: null, 
-          name: entry.participantName || entry.participantId 
+          name: effectiveName,
+          group: effectiveGroup
         });
       }
       const p = participantMap.get(entry.participantId)!;
-      const rosterMatch = roster.find(r => r.id === entry.participantId);
-      if (rosterMatch) {
-        p.name = rosterMatch.name;
-      } else if (entry.participantName) {
-        p.name = entry.participantName;
-      }
+      
+      // Update name/group if we found a better source (like roster)
+      p.name = effectiveName;
+      p.group = effectiveGroup;
 
       if (entry.round === '1') p.round1 = entry;
       else p.round2 = entry;
@@ -201,6 +212,7 @@ const App: React.FC = () => {
         } else if (data.round2.score > data.round1.score) {
           bestEntry = data.round2;
         } else {
+          // Scores equal, less time is better
           bestEntry = data.round1.time < data.round2.time ? data.round1 : data.round2;
         }
       }
@@ -209,6 +221,7 @@ const App: React.FC = () => {
         stats.push({
           participantId: pid,
           participantName: data.name,
+          group: data.group,
           bestEntry,
           round1: data.round1,
           round2: data.round2
@@ -216,6 +229,7 @@ const App: React.FC = () => {
       }
     });
 
+    // Sort globally by score then time (Group filtering happens in UI)
     return stats.sort((a, b) => {
       if (!a.bestEntry || !b.bestEntry) return 0;
       if (b.bestEntry.score !== a.bestEntry.score) {
@@ -325,6 +339,9 @@ const App: React.FC = () => {
                 {entries.length === 0 && <p className="text-slate-400 text-sm text-center py-4">暂无记录</p>}
                 {[...entries].sort((a, b) => b.timestamp - a.timestamp).map(entry => {
                   const isEditingThis = editingEntry?.id === entry.id;
+                  const rosterMatch = roster.find(r => r.id === entry.participantId);
+                  const displayGroup = rosterMatch?.group || entry.group || 'junior';
+                  
                   return (
                     <div 
                       key={entry.id} 
@@ -344,9 +361,14 @@ const App: React.FC = () => {
                             R{entry.round}
                           </span>
                         </div>
-                        <div className={`text-xs mt-1 ${isEditingThis ? 'text-amber-700' : 'text-slate-500'}`}>
-                          得分: <span className="font-medium text-slate-900">{entry.score}</span> · 
-                          耗时: <span className="font-medium text-slate-900">{entry.time}s</span>
+                        <div className="flex items-center space-x-2 mt-1">
+                          <span className="text-[10px] bg-slate-200 text-slate-600 px-1 rounded">
+                            {displayGroup === 'junior' ? '初级' : '高级'}
+                          </span>
+                          <div className={`text-xs ${isEditingThis ? 'text-amber-700' : 'text-slate-500'}`}>
+                            得分: <span className="font-medium text-slate-900">{entry.score}</span> · 
+                            耗时: <span className="font-medium text-slate-900">{entry.time}s</span>
+                          </div>
                         </div>
                       </div>
                       

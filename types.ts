@@ -1,9 +1,12 @@
+
 export type Round = '1' | '2';
+export type Group = 'junior' | 'senior'; // New Group Type
 
 export interface Entry {
   id: string;
   participantId: string;
-  participantName: string; // Added name field
+  participantName: string;
+  group: Group; // Added group
   round: Round;
   score: number;
   time: number;
@@ -12,7 +15,8 @@ export interface Entry {
 
 export interface ParticipantStats {
   participantId: string;
-  participantName: string; // Added name field
+  participantName: string;
+  group: Group; // Added group
   bestEntry: Entry | null;
   round1: Entry | null;
   round2: Entry | null;
@@ -22,6 +26,7 @@ export interface ParticipantStats {
 export interface RosterItem {
   id: string;
   name: string;
+  group: Group; // Added group
 }
 
 // Global declaration for the CDN-loaded XLSX library

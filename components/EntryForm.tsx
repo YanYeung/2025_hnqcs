@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { PlusCircle, Timer, Trophy, User, Edit2, X, Upload, FileSpreadsheet, Search, Download } from 'lucide-react';
-import { Round, Entry, RosterItem } from '../types';
+import { PlusCircle, Timer, Trophy, User, Edit2, X, Upload, FileSpreadsheet, Search, Download, Users } from 'lucide-react';
+import { Round, Entry, RosterItem, Group } from '../types';
 
 interface EntryFormProps {
-  onAddEntry: (participantId: string, participantName: string, round: Round, score: number, time: number) => void;
+  onAddEntry: (participantId: string, participantName: string, group: Group, round: Round, score: number, time: number) => void;
   editingEntry?: Entry | null;
   onUpdateEntry?: (entry: Entry) => void;
   onCancelEdit?: () => void;
@@ -21,6 +22,7 @@ const EntryForm: React.FC<EntryFormProps> = ({
 }) => {
   const [participantId, setParticipantId] = useState('');
   const [participantName, setParticipantName] = useState('');
+  const [group, setGroup] = useState<Group>('junior');
   const [round, setRound] = useState<Round>('1');
   const [score, setScore] = useState('');
   const [time, setTime] = useState('');
@@ -31,6 +33,7 @@ const EntryForm: React.FC<EntryFormProps> = ({
     if (editingEntry) {
       setParticipantId(editingEntry.participantId);
       setParticipantName(editingEntry.participantName || '');
+      setGroup(editingEntry.group || 'junior');
       setRound(editingEntry.round);
       setScore(editingEntry.score.toString());
       setTime(editingEntry.time.toString());
@@ -38,6 +41,7 @@ const EntryForm: React.FC<EntryFormProps> = ({
     } else {
       setParticipantId('');
       setParticipantName('');
+      // Keep group selection as is for convenience when entering multiple same-group students
       setRound('1');
       setScore('');
       setTime('');
@@ -45,12 +49,13 @@ const EntryForm: React.FC<EntryFormProps> = ({
     }
   }, [editingEntry]);
 
-  // Auto-fill name when ID changes based on roster
+  // Auto-fill name and group when ID changes based on roster
   useEffect(() => {
     if (!editingEntry && participantId) {
       const match = roster.find(r => r.id === participantId.trim());
       if (match) {
         setParticipantName(match.name);
+        setGroup(match.group);
       }
     }
   }, [participantId, roster, editingEntry]);
@@ -85,12 +90,13 @@ const EntryForm: React.FC<EntryFormProps> = ({
         ...editingEntry,
         participantId: participantId.trim(),
         participantName: finalName,
+        group,
         round,
         score: numScore,
         time: numTime,
       });
     } else {
-      onAddEntry(participantId.trim(), finalName, round, numScore, numTime);
+      onAddEntry(participantId.trim(), finalName, group, round, numScore, numTime);
       if (!editingEntry) {
         setParticipantId('');
         setParticipantName('');
@@ -107,16 +113,18 @@ const EntryForm: React.FC<EntryFormProps> = ({
   // Generate and download a template file with 20 dummy users
   const handleDownloadTemplate = () => {
     try {
-      const headers = ['编号', '姓名'];
+      const headers = ['编号', '姓名', '组别(初级组/高级组)'];
       const surnames = ['赵', '钱', '孙', '李', '周', '吴', '郑', '王', '冯', '陈', '褚', '卫', '蒋', '沈', '韩', '杨', '朱', '秦', '尤', '许'];
       const names = ['伟', '芳', '娜', '敏', '静', '秀', '强', '军', '杰', '磊', '洋', '勇', '艳', '杰', '娟', '涛', '明', '超', '秀', '丽'];
       
       const data = [headers];
       
       for (let i = 0; i < 20; i++) {
-        const id = `A${String(i + 1).padStart(3, '0')}`; // A001, A002...
-        const name = `${surnames[i % surnames.length]}${names[(i * 3) % names.length]}`; // Random-ish name combination
-        data.push([id, name]);
+        const id = `A${String(i + 1).padStart(3, '0')}`; 
+        const name = `${surnames[i % surnames.length]}${names[(i * 3) % names.length]}`; 
+        // Alternate groups
+        const groupText = i % 2 === 0 ? '初级组' : '高级组';
+        data.push([id, name, groupText]);
       }
 
       const ws = window.XLSX.utils.aoa_to_sheet(data);
@@ -142,25 +150,37 @@ const EntryForm: React.FC<EntryFormProps> = ({
         const ws = wb.Sheets[wsname];
         const data = window.XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
 
-        // Basic heuristic to find ID and Name columns
-        // Assumes header row exists. Looks for "编号"/"ID" and "姓名"/"Name"
         if (data.length > 0) {
           const headers = data[0].map((h: any) => String(h).toLowerCase().trim());
+          
+          // Heuristics for columns
           let idIndex = headers.findIndex((h: string) => h.includes('编号') || h.includes('id') || h.includes('code'));
           let nameIndex = headers.findIndex((h: string) => h.includes('姓名') || h.includes('name'));
+          let groupIndex = headers.findIndex((h: string) => h.includes('组别') || h.includes('组') || h.includes('group'));
 
-          // Fallback: Column 0 is ID, Column 1 is Name
+          // Fallbacks
           if (idIndex === -1) idIndex = 0;
           if (nameIndex === -1) nameIndex = 1;
+          // Group is optional in fallback, handled in logic below
 
           const newRoster: RosterItem[] = [];
           
           for (let i = 1; i < data.length; i++) {
             const row = data[i];
             if (row[idIndex]) {
+              // Parse group text
+              let rowGroup: Group = 'junior'; // Default
+              if (groupIndex !== -1 && row[groupIndex]) {
+                const gText = String(row[groupIndex]).trim();
+                if (gText.includes('高') || gText.includes('Senior')) {
+                  rowGroup = 'senior';
+                }
+              }
+
               newRoster.push({
                 id: String(row[idIndex]).trim(),
-                name: row[nameIndex] ? String(row[nameIndex]).trim() : ''
+                name: row[nameIndex] ? String(row[nameIndex]).trim() : '',
+                group: rowGroup
               });
             }
           }
@@ -176,7 +196,6 @@ const EntryForm: React.FC<EntryFormProps> = ({
         console.error(err);
         alert('解析文件失败，请检查文件格式。');
       }
-      // Reset input
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
     reader.readAsBinaryString(file);
@@ -212,7 +231,7 @@ const EntryForm: React.FC<EntryFormProps> = ({
             <button 
               onClick={handleDownloadTemplate}
               className="flex items-center space-x-1 text-xs bg-slate-50 text-slate-600 hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors"
-              title="下载20人测试名单"
+              title="下载20人测试名单模板"
             >
               <Download className="w-4 h-4" />
               <span>下载模板</span>
@@ -227,7 +246,7 @@ const EntryForm: React.FC<EntryFormProps> = ({
             <button 
               onClick={() => fileInputRef.current?.click()}
               className="flex items-center space-x-1 text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 transition-colors"
-              title="导入Excel名单 (包含编号、姓名列)"
+              title="导入Excel名单 (包含编号、姓名、组别)"
             >
               <FileSpreadsheet className="w-4 h-4" />
               <span>导入名单</span>
@@ -254,7 +273,7 @@ const EntryForm: React.FC<EntryFormProps> = ({
               />
               <datalist id="roster-ids">
                 {roster.map(r => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
+                  <option key={r.id} value={r.id}>{r.name} ({r.group === 'junior' ? '初级' : '高级'})</option>
                 ))}
               </datalist>
             </div>
@@ -276,11 +295,42 @@ const EntryForm: React.FC<EntryFormProps> = ({
           </div>
         </div>
 
+        {/* Group Selection */}
+        <div>
+          <label className="block text-sm font-medium text-slate-600 mb-1">组别</label>
+          <div className="flex space-x-4">
+            <label className={`flex-1 flex items-center justify-center space-x-2 cursor-pointer border rounded-lg p-2 transition-all ${group === 'junior' ? 'bg-sky-50 border-sky-500 text-sky-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+              <input 
+                type="radio" 
+                name="group" 
+                value="junior" 
+                checked={group === 'junior'} 
+                onChange={() => setGroup('junior')} 
+                className="hidden" 
+              />
+              <Users className="w-4 h-4" />
+              <span className="font-medium">初级组</span>
+            </label>
+            <label className={`flex-1 flex items-center justify-center space-x-2 cursor-pointer border rounded-lg p-2 transition-all ${group === 'senior' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+              <input 
+                type="radio" 
+                name="group" 
+                value="senior" 
+                checked={group === 'senior'} 
+                onChange={() => setGroup('senior')} 
+                className="hidden" 
+              />
+              <Users className="w-4 h-4" />
+              <span className="font-medium">高级组</span>
+            </label>
+          </div>
+        </div>
+
         {/* Round Selection */}
         <div>
           <label className="block text-sm font-medium text-slate-600 mb-1">比赛轮次</label>
           <div className="flex space-x-4">
-            <label className={`flex-1 flex items-center justify-center space-x-2 cursor-pointer border rounded-lg p-2 transition-all ${round === '1' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+            <label className={`flex-1 flex items-center justify-center space-x-2 cursor-pointer border rounded-lg p-2 transition-all ${round === '1' ? 'bg-slate-100 border-slate-400 text-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
               <input 
                 type="radio" 
                 name="round" 
@@ -291,7 +341,7 @@ const EntryForm: React.FC<EntryFormProps> = ({
               />
               <span className="font-medium">第一轮</span>
             </label>
-            <label className={`flex-1 flex items-center justify-center space-x-2 cursor-pointer border rounded-lg p-2 transition-all ${round === '2' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+            <label className={`flex-1 flex items-center justify-center space-x-2 cursor-pointer border rounded-lg p-2 transition-all ${round === '2' ? 'bg-slate-100 border-slate-400 text-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
               <input 
                 type="radio" 
                 name="round" 
