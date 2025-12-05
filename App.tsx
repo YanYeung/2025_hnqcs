@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Trophy, History, Trash2, Edit2, Users, Monitor, ExternalLink } from 'lucide-react';
+import { Trophy, History, Trash2, Edit2, Users, Monitor, ExternalLink, LogOut, Settings } from 'lucide-react';
 import EntryForm from './components/EntryForm';
 import Leaderboard from './components/Leaderboard';
+import Login from './components/Login';
+import ChangePasswordModal from './components/ChangePasswordModal';
 import { Entry, Round, ParticipantStats, RosterItem } from './types';
 
 type ViewMode = 'admin' | 'display';
 
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('admin');
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
   // Load initial state from local storage
   const [entries, setEntries] = useState<Entry[]>(() => {
@@ -20,7 +23,20 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [adminPassword, setAdminPassword] = useState(() => {
+    return localStorage.getItem('competition_admin_password') || 'admin';
+  });
+
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+
+  // Check session storage for auth
+  useEffect(() => {
+    const auth = sessionStorage.getItem('competition_auth');
+    if (auth === 'true') {
+      setIsAuthenticated(true);
+    }
+  }, []);
 
   // Handle routing based on hash
   useEffect(() => {
@@ -49,6 +65,9 @@ const App: React.FC = () => {
       if (e.key === 'competition_roster' && e.newValue) {
         setRoster(JSON.parse(e.newValue));
       }
+      if (e.key === 'competition_admin_password' && e.newValue) {
+        setAdminPassword(e.newValue);
+      }
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -63,6 +82,25 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('competition_roster', JSON.stringify(roster));
   }, [roster]);
+
+  const handleLogin = (password: string) => {
+    if (password === adminPassword) {
+      setIsAuthenticated(true);
+      sessionStorage.setItem('competition_auth', 'true');
+      return true;
+    }
+    return false;
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    sessionStorage.removeItem('competition_auth');
+  };
+
+  const handleChangePassword = (newPass: string) => {
+    setAdminPassword(newPass);
+    localStorage.setItem('competition_admin_password', newPass);
+  };
 
   const addEntry = (participantId: string, participantName: string, round: Round, score: number, time: number) => {
     const newEntry: Entry = {
@@ -187,7 +225,7 @@ const App: React.FC = () => {
     });
   }, [entries, roster]);
 
-  // --- Display Mode View ---
+  // --- Display Mode View (Public) ---
   if (viewMode === 'display') {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col">
@@ -196,9 +234,26 @@ const App: React.FC = () => {
     );
   }
 
-  // --- Admin Mode View ---
+  // --- Login View ---
+  if (!isAuthenticated) {
+    return (
+      <Login 
+        onLogin={handleLogin} 
+        onGoToDisplay={openDisplayMode}
+      />
+    );
+  }
+
+  // --- Admin Mode View (Authenticated) ---
   return (
     <div className="min-h-screen bg-slate-50 pb-12">
+      <ChangePasswordModal 
+        isOpen={isPasswordModalOpen} 
+        onClose={() => setIsPasswordModalOpen(false)}
+        currentPasswordHash={adminPassword}
+        onSave={handleChangePassword}
+      />
+      
       {/* Admin Header */}
       <header className="bg-indigo-600 text-white shadow-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -223,6 +278,24 @@ const App: React.FC = () => {
                 <Users className="w-4 h-4 text-indigo-300" />
                 <span>名单库: {roster.length}人</span>
              </div>
+             
+             <div className="h-6 w-px bg-indigo-500 mx-1"></div>
+
+             <button
+               onClick={() => setIsPasswordModalOpen(true)}
+               className="p-2 text-indigo-200 hover:text-white hover:bg-indigo-500 rounded-full transition-colors"
+               title="修改密码"
+             >
+               <Settings className="w-5 h-5" />
+             </button>
+
+             <button
+               onClick={handleLogout}
+               className="p-2 text-indigo-200 hover:text-white hover:bg-indigo-500 rounded-full transition-colors"
+               title="退出登录"
+             >
+               <LogOut className="w-5 h-5" />
+             </button>
           </div>
         </div>
       </header>
