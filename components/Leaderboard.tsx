@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Medal, Timer, TrendingUp, Trophy, Maximize2 } from 'lucide-react';
+import { Download, Medal, Timer, TrendingUp, Trophy } from 'lucide-react';
 import { ParticipantStats } from '../types';
 
 interface LeaderboardProps {
@@ -41,8 +41,9 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ stats, viewMode = 'admin' }) 
   };
 
   const getRankStyle = (index: number) => {
-    const base = "flex items-center justify-center rounded-full border shadow-sm";
-    const size = isDisplay ? "w-12 h-12 text-xl" : "w-8 h-8 text-sm";
+    const base = "flex items-center justify-center rounded-full border shadow-sm flex-shrink-0";
+    // Responsive sizing: larger on md+ screens in display mode
+    const size = isDisplay ? "w-10 h-10 md:w-12 md:h-12 text-lg md:text-xl" : "w-8 h-8 text-sm";
     
     switch (index) {
       case 0: return `${base} ${size} bg-yellow-100 text-yellow-700 border-yellow-300`;
@@ -53,7 +54,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ stats, viewMode = 'admin' }) 
   };
 
   const getMedalIcon = (index: number) => {
-    const iconSize = isDisplay ? "w-8 h-8" : "w-5 h-5";
+    const iconSize = isDisplay ? "w-6 h-6 md:w-8 md:h-8" : "w-5 h-5";
     switch (index) {
       case 0: return <Medal className={`${iconSize} text-yellow-500 fill-yellow-500`} />;
       case 1: return <Medal className={`${iconSize} text-slate-400 fill-slate-400`} />;
@@ -64,12 +65,12 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ stats, viewMode = 'admin' }) 
 
   if (stats.length === 0) {
     return (
-      <div className={`bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center flex flex-col items-center justify-center ${isDisplay ? 'h-screen' : 'min-h-[400px]'}`}>
-        <div className={`${isDisplay ? 'w-32 h-32' : 'w-16 h-16'} bg-slate-100 rounded-full flex items-center justify-center mb-6`}>
-          <Trophy className={`${isDisplay ? 'w-16 h-16' : 'w-8 h-8'} text-slate-300`} />
+      <div className={`bg-white rounded-xl shadow-sm border border-slate-200 p-8 md:p-12 text-center flex flex-col items-center justify-center ${isDisplay ? 'min-h-[50vh] md:h-screen' : 'min-h-[400px]'}`}>
+        <div className={`${isDisplay ? 'w-24 h-24 md:w-32 md:h-32' : 'w-16 h-16'} bg-slate-100 rounded-full flex items-center justify-center mb-6`}>
+          <Trophy className={`${isDisplay ? 'w-12 h-12 md:w-16 md:h-16' : 'w-8 h-8'} text-slate-300`} />
         </div>
-        <h3 className={`${isDisplay ? 'text-3xl' : 'text-lg'} font-medium text-slate-900`}>暂无排名数据</h3>
-        <p className={`${isDisplay ? 'text-xl mt-4' : 'text-sm mt-1'} text-slate-500`}>
+        <h3 className={`${isDisplay ? 'text-2xl md:text-3xl' : 'text-lg'} font-medium text-slate-900`}>暂无排名数据</h3>
+        <p className={`${isDisplay ? 'text-lg md:text-xl mt-4' : 'text-sm mt-1'} text-slate-500`}>
           {isDisplay ? '比赛即将开始，敬请期待...' : '请在左侧录入成绩以生成实时排名'}
         </p>
       </div>
@@ -77,17 +78,18 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ stats, viewMode = 'admin' }) 
   }
 
   return (
-    <div className={`bg-white shadow-sm border border-slate-200 overflow-hidden flex flex-col ${isDisplay ? 'h-screen rounded-none' : 'h-full rounded-xl'}`}>
-      <div className={`border-b border-slate-100 flex justify-between items-center ${isDisplay ? 'p-6 bg-indigo-600 text-white' : 'p-6'}`}>
+    <div className={`bg-white shadow-sm border border-slate-200 overflow-hidden flex flex-col ${isDisplay ? 'h-full min-h-screen md:rounded-none' : 'h-full rounded-xl'}`}>
+      {/* Header */}
+      <div className={`border-b border-slate-100 flex justify-between items-center ${isDisplay ? 'p-4 md:p-6 bg-indigo-600 text-white sticky top-0 z-20' : 'p-4 md:p-6'}`}>
         <div className="flex items-center space-x-3">
           <div className={`p-2 rounded-lg ${isDisplay ? 'bg-white/10' : 'bg-yellow-100'}`}>
             <TrendingUp className={`w-6 h-6 ${isDisplay ? 'text-white' : 'text-yellow-700'}`} />
           </div>
           <div>
-            <h2 className={`${isDisplay ? 'text-2xl' : 'text-lg'} font-bold ${isDisplay ? 'text-white' : 'text-slate-800'}`}>
+            <h2 className={`${isDisplay ? 'text-xl md:text-2xl' : 'text-lg'} font-bold ${isDisplay ? 'text-white' : 'text-slate-800'}`}>
               {isDisplay ? '实时排行榜' : '实时排名'}
             </h2>
-            {isDisplay && <p className="text-indigo-200 text-sm mt-1">Real-time Leaderboard</p>}
+            {isDisplay && <p className="text-indigo-200 text-xs md:text-sm mt-1">Real-time Leaderboard</p>}
           </div>
         </div>
         
@@ -97,20 +99,22 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ stats, viewMode = 'admin' }) 
             className="flex items-center space-x-2 text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors"
           >
             <Download className="w-4 h-4" />
-            <span>导出排名</span>
+            <span className="hidden sm:inline">导出排名</span>
           </button>
         )}
       </div>
 
       <div className="flex-1 overflow-auto bg-slate-50/50">
-        <table className="w-full text-left border-collapse">
+        
+        {/* Desktop Table View (Hidden on Mobile) */}
+        <table className="hidden md:table w-full text-left border-collapse">
           <thead className="sticky top-0 bg-white shadow-sm z-10">
             <tr className={`border-b border-slate-200 font-semibold uppercase tracking-wider ${isDisplay ? 'text-sm text-slate-600' : 'text-xs text-slate-500'}`}>
               <th className={`px-6 text-center ${isDisplay ? 'py-6 w-32' : 'py-4 w-20'}`}>排名</th>
               <th className={`px-6 ${isDisplay ? 'py-6' : 'py-4'}`}>参赛队员</th>
               <th className={`px-6 text-right ${isDisplay ? 'py-6' : 'py-4'}`}>最终得分</th>
               <th className={`px-6 text-right ${isDisplay ? 'py-6' : 'py-4'}`}>最终耗时</th>
-              <th className={`px-6 text-center hidden md:table-cell ${isDisplay ? 'py-6' : 'py-4'}`}>详细轮次</th>
+              <th className={`px-6 text-center ${isDisplay ? 'py-6' : 'py-4'}`}>详细轮次</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 bg-white">
@@ -145,7 +149,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ stats, viewMode = 'admin' }) 
                     <span>{stat.bestEntry?.time.toFixed(2)}s</span>
                   </div>
                 </td>
-                <td className={`px-6 text-center hidden md:table-cell ${isDisplay ? 'py-6' : 'py-4'}`}>
+                <td className={`px-6 text-center ${isDisplay ? 'py-6' : 'py-4'}`}>
                   <div className={`flex justify-center space-x-3 ${isDisplay ? 'text-base' : 'text-xs'}`}>
                     <div className={`px-3 py-1.5 rounded-lg border ${
                       stat.bestEntry?.round === '1' 
@@ -167,11 +171,56 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ stats, viewMode = 'admin' }) 
             ))}
           </tbody>
         </table>
+
+        {/* Mobile Card View (Visible on Mobile) */}
+        <div className="md:hidden space-y-1 p-2">
+           {stats.map((stat, index) => (
+             <div 
+               key={stat.participantId} 
+               className={`p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between mb-2 ${index < 3 ? 'bg-white' : 'bg-white/80'}`}
+             >
+               <div className="flex items-center space-x-3 overflow-hidden">
+                 <div className={getRankStyle(index)}>
+                   {getMedalIcon(index)}
+                 </div>
+                 <div className="min-w-0">
+                    <div className={`font-bold text-slate-800 truncate ${isDisplay ? 'text-lg' : 'text-base'}`}>
+                      {stat.participantName || '未知姓名'}
+                    </div>
+                    <div className="flex items-center text-slate-400 space-x-2 text-xs">
+                       <span className="font-mono bg-slate-100 px-1 rounded">{stat.participantId}</span>
+                       <span>•</span>
+                       <span className="flex space-x-1">
+                          <span className={stat.bestEntry?.round === '1' ? 'text-indigo-600 font-bold' : ''}>R1</span>
+                          <span>/</span>
+                          <span className={stat.bestEntry?.round === '2' ? 'text-indigo-600 font-bold' : ''}>R2</span>
+                       </span>
+                    </div>
+                 </div>
+               </div>
+               
+               <div className="text-right pl-2 flex-shrink-0">
+                 <div className={`font-bold text-indigo-600 leading-none ${isDisplay ? 'text-2xl' : 'text-xl'}`}>
+                   {stat.bestEntry?.score.toFixed(1)}
+                 </div>
+                 <div className="text-slate-500 text-xs mt-1 flex items-center justify-end space-x-1">
+                   <Timer className="w-3 h-3" />
+                   <span>{stat.bestEntry?.time.toFixed(2)}s</span>
+                 </div>
+               </div>
+             </div>
+           ))}
+           
+           <div className="text-center text-xs text-slate-400 py-4 pb-12">
+              —— 到底了 ——
+           </div>
+        </div>
+
       </div>
       
       {/* Footer for display mode */}
       {isDisplay && (
-        <div className="bg-slate-100 border-t border-slate-200 p-4 flex justify-between items-center text-slate-500 text-sm">
+        <div className="bg-slate-100 border-t border-slate-200 p-4 flex flex-col md:flex-row justify-between items-center text-slate-500 text-xs md:text-sm text-center md:text-left space-y-2 md:space-y-0">
           <span>2025年湖南省青少年创新实践大赛</span>
           <span>智能奥运会挑战赛 · 实时评分系统</span>
         </div>
