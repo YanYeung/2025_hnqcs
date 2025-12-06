@@ -1,16 +1,16 @@
 
-import { Entry, RosterItem, SubEvent, Referee, AwardConfig, Role } from '../types';
+import { createClient, SupabaseClient as Client } from '@supabase/supabase-js';
+import { Entry, RosterItem, SubEvent, Referee, AwardConfig } from '../types';
 
 // ==========================================
 // CONFIGURATION
 // ==========================================
-// Set to TRUE for Vercel deployment (uses relative path /api)
-const USE_SERVER = true; 
 
-// In Vercel/Production, we use relative paths. In local dev, we might use absolute.
-// If window.location.hostname is localhost, you might want to point to port 3001, 
-// but typically with Vercel we use 'vercel dev' which handles proxying.
-const API_BASE_URL = '/api';
+// Get these from your Vercel Project Settings -> Environment Variables
+// Fix for TS error: Property 'env' does not exist on type 'ImportMeta'
+const env = (import.meta as any).env || {};
+const SUPABASE_URL = env.VITE_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY || '';
 
 // ==========================================
 // INTERFACES
@@ -25,7 +25,7 @@ export interface DataClient {
   init(): Promise<void>;
   
   // Auth
-  login(username: string, password: string): Promise<{ success: boolean; user?: any; token?: string }>;
+  login(username: string, password: string): Promise<{ success: boolean; user?: any; }>;
   changePassword(newPass: string): Promise<boolean>;
 
   // Competition Info
@@ -55,293 +55,238 @@ export interface DataClient {
 }
 
 // ==========================================
-// LOCAL STORAGE IMPLEMENTATION (Fallback)
+// SUPABASE IMPLEMENTATION
 // ==========================================
 
-class LocalClient implements DataClient {
-  private simulateDelay() {
-    return new Promise(resolve => setTimeout(resolve, 300)); // Simulate network latency
+class SupabaseDataClient implements DataClient {
+  private supabase: Client;
+
+  constructor() {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      console.warn("Supabase credentials missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+    }
+    this.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   }
 
-  async init(): Promise<void> {
-    // No-op for local storage
+  async init() {
+    // Optional: Warm up connection or check health
   }
 
-  async login(username: string, password: string): Promise<{ success: boolean; user?: any }> {
-    await this.simulateDelay();
-    const adminPass = localStorage.getItem('competition_admin_password') || 'admin';
-    
-    if (username === 'admin' && password === adminPass) {
-      return { success: true, user: { role: 'admin', username: 'admin' } };
+  async login(username: string, password: string) {
+    // Use RPC (Database Functions) for secure password checking on the server side
+    if (username === 'admin') {
+      const { data, error } = await this.supabase.rpc('login_admin', { attempt: password });
+      if (error) throw error;
+      if (data && data.success) {
+        return { success: true, user: { role: 'admin', username: 'admin' } };
+      }
+    } else {
+      const { data, error } = await this.supabase.rpc('login_referee', { user_name: username, pass: password });
+      if (error) throw error;
+      if (data && data.success) {
+        return { success: true, user: { role: 'referee', username: data.username, assignedEventId: data.assignedEventId } };
+      }
     }
-
-    const referees: Referee[] = JSON.parse(localStorage.getItem('competition_referees') || '[]');
-    const ref = referees.find(r => r.username === username && r.password === password);
-    
-    if (ref) {
-      return { success: true, user: { role: 'referee', username: ref.username, assignedEventId: ref.subEventId } };
-    }
-
     return { success: false };
   }
 
-  async changePassword(newPass: string): Promise<boolean> {
-    await this.simulateDelay();
-    localStorage.setItem('competition_admin_password', newPass);
+  async changePassword(newPass: string) {
+    const { error } = await this.supabase
+      .from('meta')
+      .update({ value: newPass })
+      .eq('key', 'admin_password');
+    if (error) throw error;
     return true;
   }
 
   async getCompetitionInfo(): Promise<CompetitionInfo> {
-    await this.simulateDelay();
+    const { data, error } = await this.supabase.from('meta').select('*');
+    if (error) throw error;
+
+    // Explicitly type the Map to avoid 'unknown' inference
+    const infoMap = new Map<string, string>(data.map((item: any) => [item.key, item.value]));
+    
+    let awardConfig = { first: 15, second: 25, third: 30 };
+    try {
+      const cfg = infoMap.get('award_config');
+      if (cfg) awardConfig = JSON.parse(cfg);
+    } catch (e) {}
+
     return {
-      name: localStorage.getItem('competition_name') || '2025年湖南省青少年创新实践大赛',
-      awardConfig: JSON.parse(localStorage.getItem('competition_award_config') || '{"first":15,"second":25,"third":30}')
+      name: infoMap.get('competition_name') || '未命名赛事',
+      awardConfig
     };
-  }
-
-  async updateCompetitionInfo(name: string, config: AwardConfig): Promise<void> {
-    await this.simulateDelay();
-    localStorage.setItem('competition_name', name);
-    localStorage.setItem('competition_award_config', JSON.stringify(config));
-  }
-
-  async getSubEvents(): Promise<SubEvent[]> {
-    await this.simulateDelay();
-    const saved = localStorage.getItem('competition_subevents');
-    return saved ? JSON.parse(saved) : [{ id: 'default', name: '默认赛项' }];
-  }
-
-  async addSubEvent(name: string): Promise<SubEvent> {
-    await this.simulateDelay();
-    const events = await this.getSubEvents();
-    const newEvent = { id: crypto.randomUUID(), name };
-    localStorage.setItem('competition_subevents', JSON.stringify([...events, newEvent]));
-    return newEvent;
-  }
-
-  async deleteSubEvent(id: string): Promise<void> {
-    await this.simulateDelay();
-    const events = await this.getSubEvents();
-    localStorage.setItem('competition_subevents', JSON.stringify(events.filter(e => e.id !== id)));
-    
-    // Clean up associated data
-    const entries = await this.getEntries();
-    localStorage.setItem('competition_entries', JSON.stringify(entries.filter(e => e.subEventId !== id)));
-    
-    const roster = await this.getRoster();
-    localStorage.setItem('competition_roster', JSON.stringify(roster.filter(r => r.subEventId !== id)));
-    
-    const referees = await this.getReferees();
-    localStorage.setItem('competition_referees', JSON.stringify(referees.filter(r => r.subEventId !== id)));
-  }
-
-  async renameSubEvent(id: string, name: string): Promise<void> {
-    await this.simulateDelay();
-    const events = await this.getSubEvents();
-    const updated = events.map(e => e.id === id ? { ...e, name } : e);
-    localStorage.setItem('competition_subevents', JSON.stringify(updated));
-  }
-
-  async getReferees(): Promise<Referee[]> {
-    await this.simulateDelay();
-    return JSON.parse(localStorage.getItem('competition_referees') || '[]');
-  }
-
-  async addReferee(ref: Omit<Referee, 'id'>): Promise<Referee> {
-    await this.simulateDelay();
-    const refs = await this.getReferees();
-    const newRef = { ...ref, id: crypto.randomUUID() };
-    localStorage.setItem('competition_referees', JSON.stringify([...refs, newRef]));
-    return newRef;
-  }
-
-  async deleteReferee(id: string): Promise<void> {
-    await this.simulateDelay();
-    const refs = await this.getReferees();
-    localStorage.setItem('competition_referees', JSON.stringify(refs.filter(r => r.id !== id)));
-  }
-
-  async getEntries(subEventId?: string): Promise<Entry[]> {
-    await this.simulateDelay();
-    const all = JSON.parse(localStorage.getItem('competition_entries') || '[]');
-    if (subEventId) return all.filter((e: Entry) => e.subEventId === subEventId);
-    return all;
-  }
-
-  async addEntry(entry: Entry): Promise<Entry> {
-    await this.simulateDelay();
-    const all = await this.getEntries();
-    // Filter duplicates locally just in case
-    const filtered = all.filter(e => !(
-        e.participantId === entry.participantId && 
-        e.round === entry.round && 
-        e.subEventId === entry.subEventId
-    ));
-    localStorage.setItem('competition_entries', JSON.stringify([...filtered, entry]));
-    return entry;
-  }
-
-  async updateEntry(entry: Entry): Promise<void> {
-    await this.simulateDelay();
-    const all = await this.getEntries();
-    const updated = all.map(e => e.id === entry.id ? entry : e);
-    localStorage.setItem('competition_entries', JSON.stringify(updated));
-  }
-
-  async deleteEntry(id: string): Promise<void> {
-    await this.simulateDelay();
-    const all = await this.getEntries();
-    localStorage.setItem('competition_entries', JSON.stringify(all.filter(e => e.id !== id)));
-  }
-
-  async getRoster(subEventId?: string): Promise<RosterItem[]> {
-    await this.simulateDelay();
-    const all = JSON.parse(localStorage.getItem('competition_roster') || '[]');
-    if (subEventId) return all.filter((r: RosterItem) => r.subEventId === subEventId);
-    return all;
-  }
-
-  async importRoster(items: RosterItem[]): Promise<void> {
-    await this.simulateDelay();
-    const all = await this.getRoster();
-    // Simple merge: remove existing for these IDs in this event, then add
-    const incomingIds = new Set(items.map(i => i.id + '_' + i.subEventId));
-    const kept = all.filter(r => !incomingIds.has(r.id + '_' + r.subEventId));
-    localStorage.setItem('competition_roster', JSON.stringify([...kept, ...items]));
-  }
-}
-
-// ==========================================
-// REST API IMPLEMENTATION (Server)
-// ==========================================
-
-class RestClient implements DataClient {
-  private headers() {
-    return {
-      'Content-Type': 'application/json',
-    };
-  }
-
-  async init() {}
-
-  async login(username: string, password: string) {
-    const res = await fetch(`${API_BASE_URL}/login`, {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify({ username, password })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Login failed');
-    return { success: res.ok, user: data.user, token: data.token };
-  }
-
-  async changePassword(newPass: string) {
-    const res = await fetch(`${API_BASE_URL}/admin/password`, {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify({ password: newPass })
-    });
-    return res.ok;
-  }
-
-  async getCompetitionInfo() {
-    const res = await fetch(`${API_BASE_URL}/info`);
-    return res.json();
   }
 
   async updateCompetitionInfo(name: string, config: AwardConfig) {
-    await fetch(`${API_BASE_URL}/info`, {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify({ name, config })
-    });
+    await this.supabase.from('meta').upsert({ key: 'competition_name', value: name });
+    await this.supabase.from('meta').upsert({ key: 'award_config', value: JSON.stringify(config) });
   }
 
   async getSubEvents() {
-    const res = await fetch(`${API_BASE_URL}/events`);
-    return res.json();
+    const { data, error } = await this.supabase.from('sub_events').select('*');
+    if (error) throw error;
+    return data || [];
   }
 
   async addSubEvent(name: string) {
-    const res = await fetch(`${API_BASE_URL}/events`, {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify({ name })
-    });
-    return res.json();
+    const { data, error } = await this.supabase
+      .from('sub_events')
+      .insert({ name })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
   }
 
   async deleteSubEvent(id: string) {
-    await fetch(`${API_BASE_URL}/events/${id}`, { method: 'DELETE' });
+    // Cascading deletes handled by Postgres Foreign Keys
+    const { error } = await this.supabase.from('sub_events').delete().eq('id', id);
+    if (error) throw error;
   }
 
   async renameSubEvent(id: string, name: string) {
-    await fetch(`${API_BASE_URL}/events/${id}`, {
-      method: 'PUT',
-      headers: this.headers(),
-      body: JSON.stringify({ name })
-    });
+    const { error } = await this.supabase.from('sub_events').update({ name }).eq('id', id);
+    if (error) throw error;
   }
 
   async getReferees() {
-    const res = await fetch(`${API_BASE_URL}/referees`);
-    return res.json();
+    // Map snake_case DB columns to camelCase Types
+    const { data, error } = await this.supabase
+      .from('referees')
+      .select('id, username, password, subEventId:sub_event_id');
+    if (error) throw error;
+    return data || [];
   }
 
   async addReferee(ref: Omit<Referee, 'id'>) {
-    const res = await fetch(`${API_BASE_URL}/referees`, {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify(ref)
-    });
-    return res.json();
+    const { data, error } = await this.supabase
+      .from('referees')
+      .insert({ 
+        username: ref.username, 
+        password: ref.password, 
+        sub_event_id: ref.subEventId 
+      })
+      .select('id, username, password, subEventId:sub_event_id')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
   async deleteReferee(id: string) {
-    await fetch(`${API_BASE_URL}/referees/${id}`, { method: 'DELETE' });
+    const { error } = await this.supabase.from('referees').delete().eq('id', id);
+    if (error) throw error;
   }
 
   async getEntries(subEventId?: string) {
-    const url = subEventId ? `${API_BASE_URL}/entries?subEventId=${subEventId}` : `${API_BASE_URL}/entries`;
-    const res = await fetch(url);
-    return res.json();
+    let query = this.supabase
+      .from('entries')
+      .select(`
+        id, 
+        participantId:participant_id, 
+        participantName:participant_name, 
+        group:group_type, 
+        round, 
+        score, 
+        time, 
+        timestamp, 
+        subEventId:sub_event_id
+      `);
+    
+    if (subEventId) {
+      query = query.eq('sub_event_id', subEventId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
   }
 
   async addEntry(entry: Entry) {
-    const res = await fetch(`${API_BASE_URL}/entries`, {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify(entry)
-    });
-    return res.json();
+    // Exclude 'id' to let DB generate UUID if needed, or use the one provided
+    // Here we map camelCase back to snake_case
+    const dbEntry = {
+      participant_id: entry.participantId,
+      participant_name: entry.participantName,
+      group_type: entry.group,
+      round: entry.round,
+      score: entry.score,
+      time: entry.time,
+      timestamp: entry.timestamp,
+      sub_event_id: entry.subEventId
+    };
+
+    const { data, error } = await this.supabase
+      .from('entries')
+      .insert(dbEntry)
+      .select(`
+        id, 
+        participantId:participant_id, 
+        participantName:participant_name, 
+        group:group_type, 
+        round, 
+        score, 
+        time, 
+        timestamp, 
+        subEventId:sub_event_id
+      `)
+      .single();
+      
+    if (error) throw error;
+    return data;
   }
 
   async updateEntry(entry: Entry) {
-    await fetch(`${API_BASE_URL}/entries/${entry.id}`, {
-      method: 'PUT',
-      headers: this.headers(),
-      body: JSON.stringify(entry)
-    });
+    const { error } = await this.supabase
+      .from('entries')
+      .update({
+        participant_id: entry.participantId,
+        participant_name: entry.participantName,
+        group_type: entry.group,
+        round: entry.round,
+        score: entry.score,
+        time: entry.time,
+        // timestamp: entry.timestamp // Usually don't update timestamp on edit unless desired
+      })
+      .eq('id', entry.id);
+    if (error) throw error;
   }
 
   async deleteEntry(id: string) {
-    await fetch(`${API_BASE_URL}/entries/${id}`, { method: 'DELETE' });
+    const { error } = await this.supabase.from('entries').delete().eq('id', id);
+    if (error) throw error;
   }
 
   async getRoster(subEventId?: string) {
-    const url = subEventId ? `${API_BASE_URL}/roster?subEventId=${subEventId}` : `${API_BASE_URL}/roster`;
-    const res = await fetch(url);
-    return res.json();
+    let query = this.supabase
+      .from('roster')
+      .select('id, name, group:group_type, subEventId:sub_event_id');
+      
+    if (subEventId) {
+      query = query.eq('sub_event_id', subEventId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
   }
 
   async importRoster(items: RosterItem[]) {
-    await fetch(`${API_BASE_URL}/roster/batch`, {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify({ items })
-    });
+    // Supabase upsert
+    const dbItems = items.map(item => ({
+      id: item.id,
+      name: item.name,
+      group_type: item.group,
+      sub_event_id: item.subEventId
+    }));
+
+    const { error } = await this.supabase
+      .from('roster')
+      .upsert(dbItems, { onConflict: 'id,sub_event_id' });
+      
+    if (error) throw error;
   }
 }
 
-// Export the configured client
-export const client = USE_SERVER ? new RestClient() : new LocalClient();
+// Export the Supabase client
+export const client = new SupabaseDataClient();
